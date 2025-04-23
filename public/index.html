@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>F1 Tippspiel – Login</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      background: #f0f0f0;
+      padding: 2rem;
+    }
+    #loginForm, #main {
+      max-width: 400px;
+      margin: auto;
+      background: white;
+      padding: 1.5rem;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    h1 { text-align: center; }
+    input, button {
+      width: 100%;
+      margin: 0.5rem 0;
+      padding: 0.5rem;
+      font-size: 1rem;
+    }
+    #fahrerButtons button {
+      margin: 0.3rem;
+      padding: 0.4rem 0.8rem;
+    }
+    #nichtDran {
+      color: red;
+      text-align: center;
+      margin-top: 1rem;
+    }
+  </style>
+</head>
+<body>
+
+<div id="loginForm">
+  <h1>Login</h1>
+  <input type="text" id="username" placeholder="Benutzername (z. B. Tom)" />
+  <input type="password" id="password" placeholder="Passwort" />
+  <button onclick="login()">Einloggen</button>
+  <p id="loginStatus"></p>
+</div>
+
+<div id="main" style="display:none">
+  <h1>Willkommen, <span id="user"></span></h1>
+  <p><strong>Aktuell dran:</strong> <span id="dran"></span></p>
+  <p id="nichtDran"></p>
+  <button onclick="logout()">Logout</button>
+  <h3>Deine Fahrer:</h3>
+  <ul id="meineFahrer"></ul>
+  <h3>Fahrer wählen:</h3>
+  <div id="fahrerButtons"></div>
+</div>
+
+<script>
+const api = (url, method = 'GET', data) => {
+  return fetch(url, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: data ? JSON.stringify(data) : undefined,
+    credentials: 'include'
+  }).then(res => res.json());
+};
+
+let meinName = '';
+
+async function login() {
+  const username = document.getElementById('username').value;
+  const password = document.getElementById('password').value;
+  const res = await api('/login', 'POST', { username, password });
+  if (res.message) {
+    meinName = username;
+    document.getElementById('loginForm').style.display = 'none';
+    document.getElementById('main').style.display = 'block';
+    document.getElementById('user').innerText = username;
+    loadStatus();
+  } else {
+    document.getElementById('loginStatus').innerText = res.error;
+  }
+}
+
+async function logout() {
+  await api('/logout', 'POST');
+  location.reload();
+}
+
+async function loadStatus() {
+  const me = await api('/me');
+  const status = await api('/status');
+  document.getElementById('meineFahrer').innerHTML = me.fahrer.map(f => `<li>${f}</li>`).join('');
+  document.getElementById('dran').innerText = status.aktuellerSpieler;
+  const ichBinDran = status.aktuellerSpieler === me.username;
+  document.getElementById('nichtDran').innerText = ichBinDran ? '' : 'Du bist nicht dran!';
+
+  const fahrerButtons = document.getElementById('fahrerButtons');
+  fahrerButtons.innerHTML = '';
+  for (let name of status.verbleibendeFahrer) {
+    const btn = document.createElement('button');
+    btn.textContent = name;
+    btn.disabled = !ichBinDran;
+    btn.onclick = async () => {
+      const result = await api('/waehlen', 'POST', { fahrerName: name });
+      if (result.error) {
+        alert(result.error);
+      }
+      loadStatus();
+    };
+    fahrerButtons.appendChild(btn);
+  }
+}
+</script>
+</body>
+</html>
